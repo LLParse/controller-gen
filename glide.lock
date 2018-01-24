@@ -1,0 +1,26 @@
+hash: 0b780596f37db65e07dcbe68579e577cc783aaa69154c673c1786df2cec83967
+updated: 2018-01-23T19:55:37.244756-07:00
+imports:
+- name: github.com/golang/glog
+  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
+- name: github.com/spf13/pflag
+  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+- name: golang.org/x/tools
+  version: 2382e3994d48b1d22acc2c86bcad0a2aff028e32
+  subpackages:
+  - go/ast/astutil
+  - imports
+- name: k8s.io/code-generator
+  version: f4fbdd37ed9c2292ea0abaabd8581008984dffc4
+  subpackages:
+  - cmd/client-gen/generators/util
+  - cmd/client-gen/types
+- name: k8s.io/gengo
+  version: b6c426f7730e6d66e6e476a85d1c3eb7633880e0
+  subpackages:
+  - args
+  - generator
+  - namer
+  - parser
+  - types
+testImports: []
