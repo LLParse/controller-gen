@@ -69,7 +69,6 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 	for _, inputDir := range arguments.InputDirs {
 		p := context.Universe.Package(inputDir)
 
-		glog.V(3).Infof("package: %+v\n", p)
 		objectMeta, internal, err := objectMetaForPackage(p)
 		if err != nil {
 			glog.Fatal(err)
