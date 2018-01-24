@@ -7,6 +7,7 @@ import (
 	"k8s.io/gengo/args"
 
 	"github.com/golang/glog"
+	customargs "github.com/llparse/controller-gen/args"
 	"github.com/llparse/controller-gen/generators"
 	"github.com/spf13/pflag"
 )
@@ -20,8 +21,13 @@ func main() {
 	}
 	arguments.AddFlags(pflag.CommandLine)
 	flag.Set("logtostderr", "true")
+	name := flag.String("name", "foo", "controller name")
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
+
+	arguments.CustomArgs = customargs.Args{
+		Name: *name,
+	}
 
 	// Run it.
 	if err := arguments.Execute(

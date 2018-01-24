@@ -5,15 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/golang/glog"
+	"k8s.io/code-generator/cmd/client-gen/generators/util"
+	clientgentypes "k8s.io/code-generator/cmd/client-gen/types"
 	"k8s.io/gengo/args"
 	"k8s.io/gengo/generator"
 	"k8s.io/gengo/namer"
 	"k8s.io/gengo/types"
 
-	"k8s.io/code-generator/cmd/client-gen/generators/util"
-	clientgentypes "k8s.io/code-generator/cmd/client-gen/types"
-
-	"github.com/golang/glog"
+	customargs "github.com/llparse/controller-gen/args"
 )
 
 // NameSystems returns the name system used by the generators in this package.
@@ -60,8 +60,12 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 
 	boilerplate = append(boilerplate, []byte(generatedBy())...)
 
-	var packageList generator.Packages
+	customArgs, ok := arguments.CustomArgs.(customargs.Args)
+	if !ok {
+		glog.Fatalf("cannot convert arguments.CustomArgs to customargs.Args")
+	}
 
+	var typesToGenerate []*types.Type
 	for _, inputDir := range arguments.InputDirs {
 		p := context.Universe.Package(inputDir)
 
@@ -103,7 +107,6 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 			glog.V(3).Infof("gv override: %+v\n", gv)
 		}
 
-		var typesToGenerate []*types.Type
 		glog.V(3).Infof("package types: %+v\n", p.Types)
 		for k, v := range p.Types {
 			glog.V(3).Infof("%+v: %+v", k, v)
@@ -120,29 +123,60 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		}
 		orderer := namer.Orderer{Namer: namer.NewPrivateNamer(0)}
 		typesToGenerate = orderer.OrderTypes(typesToGenerate)
-
-		packagePath := filepath.Join(arguments.OutputPackagePath, strings.ToLower(gv.Group.NonEmpty()), strings.ToLower(gv.Version.NonEmpty()))
-		packageList = append(packageList, &generator.DefaultPackage{
-			PackageName: strings.ToLower(gv.Version.NonEmpty()),
-			PackagePath: packagePath,
-			HeaderText:  boilerplate,
-			GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
-				generators = append(generators, &controllerMainGenerator{
-					DefaultGen: generator.DefaultGen{
-						OptionalName: "main",
-					},
-					packagePath: filepath.Join(arguments.OutputBase, packagePath),
-					imports:     generator.NewImportTracker(),
-					types:       typesToGenerate,
-				})
-				return generators
-			},
-			FilterFunc: func(c *generator.Context, t *types.Type) bool {
-				tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
-				return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("get")
-			},
-		})
 	}
+
+	if len(typesToGenerate) == 0 {
+		glog.Fatalf("no valid types were specified")
+	}
+
+	var packageList generator.Packages
+
+	controllerPackagePath := filepath.Join(arguments.OutputPackagePath, "pkg", "controller", customArgs.Name)
+	packageList = append(packageList, &generator.DefaultPackage{
+		PackageName: customArgs.Name,
+		PackagePath: controllerPackagePath,
+		HeaderText:  boilerplate,
+		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
+			generators = append(generators, &controllerGenerator{
+				DefaultGen: generator.DefaultGen{
+					OptionalName: "controller",
+				},
+				packagePath: filepath.Join(arguments.OutputBase, controllerPackagePath),
+				imports:     generator.NewImportTracker(),
+				name:        customArgs.Name,
+				types:       typesToGenerate,
+			})
+			return generators
+		},
+		FilterFunc: func(c *generator.Context, t *types.Type) bool {
+			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
+			return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("get")
+		},
+	})
+
+	controllerMainPackagePath := filepath.Join(arguments.OutputPackagePath, "cmd", "controller", customArgs.Name)
+	packageList = append(packageList, &generator.DefaultPackage{
+		PackageName: "main",
+		PackagePath: controllerMainPackagePath,
+		HeaderText:  boilerplate,
+		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
+			generators = append(generators, &controllerMainGenerator{
+				DefaultGen: generator.DefaultGen{
+					OptionalName: "main",
+				},
+				controllerPackagePath: controllerPackagePath,
+				packagePath:           filepath.Join(arguments.OutputBase, controllerMainPackagePath),
+				imports:               generator.NewImportTracker(),
+				name:                  customArgs.Name,
+				types:                 typesToGenerate,
+			})
+			return generators
+		},
+		FilterFunc: func(c *generator.Context, t *types.Type) bool {
+			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
+			return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("get")
+		},
+	})
 
 	return packageList
 }
