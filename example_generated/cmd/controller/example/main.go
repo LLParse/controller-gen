@@ -27,16 +27,21 @@ func main() {
 		panic(err)
 	}
 
+	// FIXME make dynamic
 	kubeClientset := kubernetes.NewForConfigOrDie(config)
+	// FIXME make dynamic
 	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClientset, 0*time.Second)
 
 	stopCh := makeStopChan()
 
 	go example.NewController(
+		// FIXME make dynamic
 		kubeClientset,
+		// FIXME make dynamic
 		kubeInformerFactory.Core().V1().Pods(),
 	).Run(stopCh)
 
+	// FIXME make dynamic
 	kubeInformerFactory.Start(stopCh)
 
 	<-stopCh

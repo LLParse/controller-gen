@@ -12,6 +12,11 @@ import (
 	"github.com/spf13/pflag"
 )
 
+var (
+	name          = pflag.StringP("name", "n", "", "Name of the controller.")
+	resourceTypes = pflag.StringSliceP("resource-types", "t", []string{"Node", "Pod"}, "Comma-separated list of resource types to get change events from.")
+)
+
 func main() {
 	arguments := &args.GeneratorArgs{
 		OutputBase:        args.DefaultSourceTree(),
@@ -20,13 +25,14 @@ func main() {
 		OutputPackagePath: "k8s.io/kubernetes/pkg/generated/controller",
 	}
 	arguments.AddFlags(pflag.CommandLine)
+
 	flag.Set("logtostderr", "true")
-	name := flag.String("name", "foo", "controller name")
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
 	arguments.CustomArgs = customargs.Args{
-		Name: *name,
+		Name:          *name,
+		ResourceTypes: *resourceTypes,
 	}
 
 	// Run it.

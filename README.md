@@ -13,9 +13,9 @@ Generate Kubernetes controller stubs that sync configurable resource types
 ```sh
 controller-gen \
   --input-dirs k8s.io/api/core/v1 \
-  --output-base "$GOPATH/src" \
   --output-package "github.com/llparse/controller-gen/example_generated" \
   --go-header-file /dev/null \
+  -v 3 \
   --name example \
-  -v 3
+  --resource-types Pod
 ```

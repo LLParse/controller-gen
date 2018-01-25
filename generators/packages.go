@@ -106,16 +106,20 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 			glog.V(3).Infof("gv override: %+v\n", gv)
 		}
 
-		glog.V(3).Infof("package types: %+v\n", p.Types)
 		for k, v := range p.Types {
 			glog.V(3).Infof("%+v: %+v", k, v)
 		}
-		for _, t := range p.Types {
+		for name, t := range p.Types {
 			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
 			if !tags.GenerateClient || !tags.HasVerb("list") || !tags.HasVerb("get") {
 				continue
 			}
-			typesToGenerate = append(typesToGenerate, t)
+			for _, resourceType := range customArgs.ResourceTypes {
+				if strings.EqualFold(resourceType, name) {
+					typesToGenerate = append(typesToGenerate, t)
+					break
+				}
+			}
 		}
 		if len(typesToGenerate) == 0 {
 			continue
@@ -127,6 +131,8 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 	if len(typesToGenerate) == 0 {
 		glog.Fatalf("no valid types were specified")
 	}
+
+	glog.V(3).Infof("Types to generate: %+v", typesToGenerate)
 
 	var packageList generator.Packages
 

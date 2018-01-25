@@ -15,23 +15,28 @@ import (
 )
 
 type Controller struct {
+	// FIXME make dynamic
 	kubeClient kubernetes.Interface
 
 	podLister       v1.PodLister
 	podListerSynced cache.InformerSynced
 
+	// FIXME make dynamic
 	podQueue workqueue.RateLimitingInterface
 }
 
 func NewController(
+	// FIXME make dynamic
 	kubeClient kubernetes.Interface,
 	podInformer core_v1.PodInformer,
 ) *Controller {
 	ctrl := &Controller{
 		kubeClient: kubeClient,
-		podQueue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pod"),
+		// FIXME make dynamic
+		podQueue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pod"),
 	}
 
+	// FIXME make dynamic
 	podInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.podQueue, obj) },
@@ -47,15 +52,18 @@ func NewController(
 }
 
 func (ctrl *Controller) Run(stopCh <-chan struct{}) {
+	// FIXME make dynamic
 	defer ctrl.podQueue.ShutDown()
 
-	glog.Infof("Starting pod controller")
-	defer glog.Infof("Shutting down pod Controller")
+	glog.Infof("Starting example controller")
+	defer glog.Infof("Shutting down example Controller")
 
+	// FIXME make dynamic
 	if !cache.WaitForCacheSync(stopCh, ctrl.podListerSynced) {
 		return
 	}
 
+	// FIXME make dynamic
 	go wait.Until(ctrl.podWorker, time.Second, stopCh)
 
 	<-stopCh
@@ -75,6 +83,7 @@ func (ctrl *Controller) enqueueWork(queue workqueue.Interface, obj interface{}) 
 	queue.Add(objName)
 }
 
+// FIXME make dynamic
 func (ctrl *Controller) podWorker() {
 	workFunc := func() bool {
 		keyObj, quit := ctrl.podQueue.Get()
