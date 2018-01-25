@@ -11,6 +11,8 @@ import (
 
 	"github.com/golang/glog"
 	example "github.com/llparse/controller-gen/example_generated/pkg/controller/example"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	clientcmd "k8s.io/client-go/tools/clientcmd"
 )

@@ -4,3 +4,5 @@ import:
   version: b6c426f7730e6d66e6e476a85d1c3eb7633880e0
 - package: k8s.io/code-generator
   version: f4fbdd37ed9c2292ea0abaabd8581008984dffc4
+- package: k8s.io/client-go
+  version: release-5.0

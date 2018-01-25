@@ -8,7 +8,10 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/util/wait"
 	core_v1 "k8s.io/client-go/informers/core/v1"
+	kubernetes "k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/listers/core/v1"
+	cache "k8s.io/client-go/tools/cache"
+	workqueue "k8s.io/client-go/util/workqueue"
 )
 
 type Controller struct {
