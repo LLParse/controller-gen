@@ -10,6 +10,8 @@ Generate Kubernetes controller stubs that sync configurable resource types
 
 ## Example Usage
 
+Generate the controller code
+
 ```sh
 controller-gen \
   --input-dirs k8s.io/api/core/v1 \
@@ -18,4 +20,16 @@ controller-gen \
   -v 3 \
   --name example \
   --resource-types Pod
+```
+
+Build the controller
+
+```sh
+go build -o controller-example example_generated/cmd/controller/example/main.go
+```
+
+Run it!
+
+```sh
+./controller-example -kubeconfig ~/.kube/config -v 5
 ```
