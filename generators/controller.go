@@ -41,8 +41,11 @@ func (g *controllerGenerator) Imports(c *generator.Context) []string {
 func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, w io.Writer) error {
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 	m := map[string]interface{}{
-		"PodLister":   c.Universe.Type(types.Name{Package: "k8s.io/client-go/listers/core/v1", Name: "PodLister"}),
-		"PodInformer": c.Universe.Type(types.Name{Package: "k8s.io/client-go/informers/core/v1", Name: "PodInformer"}),
+		"PodLister":             c.Universe.Type(types.Name{Package: "k8s.io/client-go/listers/core/v1", Name: "PodLister"}),
+		"PodInformer":           c.Universe.Type(types.Name{Package: "k8s.io/client-go/informers/core/v1", Name: "PodInformer"}),
+		"KubeClient":            c.Universe.Type(types.Name{Package: "k8s.io/client-go/kubernetes", Name: "Interface"}),
+		"InformerSynced":        c.Universe.Function(types.Name{Package: "k8s.io/client-go/tools/cache", Name: "InformerSynced"}),
+		"RateLimitingInterface": c.Universe.Type(types.Name{Package: "k8s.io/client-go/util/workqueue", Name: "RateLimitingInterface"}),
 	}
 	sw.Do(controllerType, m)
 	sw.Do(newControllerFunc, m)
@@ -56,12 +59,12 @@ func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, 
 // "k8s.io/client-go/kubernetes", "k8s.io/client-go/util/workqueue"
 var controllerType = `
 type Controller struct {
-  kubeClient kubernetes.Interface
+  kubeClient $.KubeClient|raw$
 
   podLister       $.PodLister|raw$
-  podListerSynced cache.InformerSynced
+  podListerSynced $.InformerSynced|raw$
 
-  podQueue workqueue.RateLimitingInterface
+  podQueue $.RateLimitingInterface|raw$
 }
 `
 
@@ -69,7 +72,7 @@ type Controller struct {
 // "k8s.io/client-go/util/workqueue"
 var newControllerFunc = `
 func NewController(
-  kubeClient kubernetes.Interface,
+  kubeClient $.KubeClient|raw$,
   podInformer $.PodInformer|raw$,
 ) *Controller {
   ctrl := &Controller{

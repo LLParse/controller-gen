@@ -5,10 +5,10 @@ Generate Kubernetes controller stubs that sync configurable resource types
 
 ## Installation
 
-Install Go 1.9+
-`go get github.com/llparse/controller-gen`
+1. Install Go 1.9+
+2. `go get github.com/llparse/controller-gen`
 
-## Usage
+## Example Usage
 
 ```sh
 controller-gen \
@@ -19,4 +19,3 @@ controller-gen \
   --name example \
   -v 3
 ```
-
