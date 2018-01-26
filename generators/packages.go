@@ -106,14 +106,12 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 			glog.V(3).Infof("gv override: %+v\n", gv)
 		}
 
-		for k, v := range p.Types {
-			glog.V(3).Infof("%+v: %+v", k, v)
-		}
 		for name, t := range p.Types {
 			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
 			if !tags.GenerateClient || !tags.HasVerb("list") || !tags.HasVerb("get") {
 				continue
 			}
+			glog.V(3).Infof("%+v: %+v", name, t)
 			for _, resourceType := range customArgs.ResourceTypes {
 				if strings.EqualFold(resourceType, name) {
 					typesToGenerate = append(typesToGenerate, t)

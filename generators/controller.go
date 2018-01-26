@@ -43,49 +43,68 @@ type ResourceType struct {
 	Name     string
 	Informer Informer
 	Lister   Lister
+	Queue    Queue
+	Worker   Worker
+}
+
+type Informer struct {
+	VariableName string
+	Type         *types.Type
 }
 
 type Lister struct {
-	ListerVariableName string
-	ListerType         *types.Type
+	VariableName string
+	Type         *types.Type
 
 	InformerSyncedVariableName string
 	InformerSyncedFunction     *types.Type
 }
 
-type Informer struct {
-	InformerVariableName string
-	InformerType         *types.Type
+type Queue struct {
+	VariableName  string
+	InterfaceType *types.Type
+}
+
+type Worker struct {
+	VariableName string
+}
+
+func getResourceTypes(c *generator.Context, rTypes []*types.Type) (resourceTypes []ResourceType) {
+	// TODO how do we find the lister/informer packages and can we import them
+	for _, t := range rTypes {
+		nameLowerFirst := strings.ToLower(t.Name.Name[:1]) + t.Name.Name[1:]
+		resourceTypes = append(resourceTypes, ResourceType{
+			Name: t.Name.Name,
+			Informer: Informer{
+				VariableName: nameLowerFirst + "Informer",
+				Type:         c.Universe.Type(types.Name{Package: "k8s.io/client-go/informers/core/v1", Name: t.Name.Name + "Informer"}),
+			},
+			Lister: Lister{
+				VariableName: nameLowerFirst + "Lister",
+				Type:         c.Universe.Type(types.Name{Package: "k8s.io/client-go/listers/core/v1", Name: t.Name.Name + "Lister"}),
+				InformerSyncedVariableName: strings.ToLower(t.Name.Name) + "ListerSynced",
+				InformerSyncedFunction:     c.Universe.Function(cacheInformerSyncedFunc),
+			},
+			Queue: Queue{
+				VariableName:  nameLowerFirst + "Queue",
+				InterfaceType: c.Universe.Type(workqueueRateLimitingInterface),
+			},
+			Worker: Worker{
+				VariableName: nameLowerFirst + "Worker",
+			},
+		})
+	}
+	return
 }
 
 func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, w io.Writer) error {
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"Name":                  g.name,
-		"KubeClient":            c.Universe.Type(types.Name{Package: "k8s.io/client-go/kubernetes", Name: "Interface"}),
-		"InformerSynced":        c.Universe.Function(types.Name{Package: "k8s.io/client-go/tools/cache", Name: "InformerSynced"}),
-		"RateLimitingInterface": c.Universe.Type(types.Name{Package: "k8s.io/client-go/util/workqueue", Name: "RateLimitingInterface"}),
+		"types":      getResourceTypes(c, g.types),
+		"Name":       g.name,
+		"KubeClient": c.Universe.Type(kubernetesInterface),
 	}
-
-	// TODO how do we find the lister/informer packages and can we import them
-	var resourceTypes []ResourceType
-	for _, t := range g.types {
-		resourceTypes = append(resourceTypes, ResourceType{
-			Name: t.Name.Name,
-			Informer: Informer{
-				InformerVariableName: strings.ToLower(t.Name.Name) + "Informer",
-				InformerType:         c.Universe.Type(types.Name{Package: "k8s.io/client-go/informers/core/v1", Name: t.Name.Name + "Informer"}),
-			},
-			Lister: Lister{
-				ListerVariableName:         strings.ToLower(t.Name.Name) + "Lister",
-				ListerType:                 c.Universe.Type(types.Name{Package: "k8s.io/client-go/listers/core/v1", Name: t.Name.Name + "Lister"}),
-				InformerSyncedVariableName: strings.ToLower(t.Name.Name) + "ListerSynced",
-				InformerSyncedFunction:     c.Universe.Function(types.Name{Package: "k8s.io/client-go/tools/cache", Name: "InformerSynced"}),
-			},
-		})
-	}
-	m["types"] = resourceTypes
 
 	sw.Do(controllerType, m)
 	sw.Do(newControllerFunc, m)
@@ -103,12 +122,13 @@ type Controller struct {
   kubeClient $.KubeClient|raw$
 
   $range .types$
-  $.Lister.ListerVariableName$ $.Lister.ListerType|raw$
+  $.Lister.VariableName$ $.Lister.Type|raw$
   $.Lister.InformerSyncedVariableName$ $.Lister.InformerSyncedFunction|raw$
   $- end$
 
-  // FIXME make dynamic
-  podQueue $.RateLimitingInterface|raw$
+  $range .types$
+  $.Queue.VariableName$ $.Queue.InterfaceType|raw$
+  $- end$
 }
 `
 
@@ -117,27 +137,29 @@ func NewController(
   // FIXME make dynamic
   kubeClient $.KubeClient|raw$,
   $- range .types$
-  $.Informer.InformerVariableName$ $.Informer.InformerType|raw$,
+  $.Informer.VariableName$ $.Informer.Type|raw$,
   $- end$
 ) *Controller {
   ctrl := &Controller{
     kubeClient: kubeClient,
-    // FIXME make dynamic
-    podQueue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pod"),
+    $- range .types$
+    $.Queue.VariableName$: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "$.Name$"),
+    $- end$
   }
 
-  // FIXME make dynamic
-  podInformer.Informer().AddEventHandler(
+  $range .types$
+  $.Informer.VariableName$.Informer().AddEventHandler(
     cache.ResourceEventHandlerFuncs{
-      AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.podQueue, obj) },
-      UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.podQueue, newObj) },
-      DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.podQueue, obj) },
+      AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.$.Queue.VariableName$, obj) },
+      UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.$.Queue.VariableName$, newObj) },
+      DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.$.Queue.VariableName$, obj) },
     },
   )
+  $- end$
 
   $range .types$
-  ctrl.$.Lister.ListerVariableName$ = $.Informer.InformerVariableName$.Lister()
-  ctrl.$.Lister.InformerSyncedVariableName$ = $.Informer.InformerVariableName$.Informer().HasSynced
+  ctrl.$.Lister.VariableName$ = $.Informer.VariableName$.Lister()
+  ctrl.$.Lister.InformerSyncedVariableName$ = $.Informer.VariableName$.Informer().HasSynced
   $- end$
 
   return ctrl
@@ -146,8 +168,9 @@ func NewController(
 
 var controllerRunFunc = `
 func (ctrl *Controller) Run(stopCh <-chan struct{}) {
-  // FIXME make dynamic
-  defer ctrl.podQueue.ShutDown()
+  $- range .types$
+  defer ctrl.$.Queue.VariableName$.ShutDown()
+  $- end$
 
   glog.Infof("Starting $.Name$ controller")
   defer glog.Infof("Shutting down $.Name$ Controller")
@@ -160,8 +183,9 @@ func (ctrl *Controller) Run(stopCh <-chan struct{}) {
     return
   }
 
-  // FIXME make dynamic
-  go wait.Until(ctrl.podWorker, time.Second, stopCh)
+  $range .types$
+  go wait.Until(ctrl.$.Worker.VariableName$, time.Second, stopCh)
+  $- end$
 
   <-stopCh
 }
@@ -184,25 +208,26 @@ func (ctrl *Controller) enqueueWork(queue workqueue.Interface, obj interface{}) 
 `
 
 var controllerPodWorkerFunc = `
-// FIXME make dynamic
-func (ctrl *Controller) podWorker() {
+$range .types$
+func (ctrl *Controller) $.Worker.VariableName$() {
   workFunc := func() bool {
-    keyObj, quit := ctrl.podQueue.Get()
+    keyObj, quit := ctrl.$.Queue.VariableName$.Get()
     if quit {
       return true
     }
-    defer ctrl.podQueue.Done(keyObj)
+    defer ctrl.$.Queue.VariableName$.Done(keyObj)
     key := keyObj.(string)
-    glog.V(5).Infof("podWorker[%s]", key)
+    glog.V(5).Infof("$.Worker.VariableName$[%s]", key)
     return false
   }
   for {
     if quit := workFunc(); quit {
-      glog.Infof("pod worker queue shutting down")
+      glog.Infof("$.Worker.VariableName$ queue shutting down")
       return
     }
   }
 }
+$- end$
 `
 
 // controllerMainGenerator produces a controller main
@@ -236,9 +261,10 @@ func (g *controllerMainGenerator) GenerateType(c *generator.Context, t *types.Ty
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"Config":               c.Universe.Type(types.Name{Package: "k8s.io/client-go/rest", Name: "Config"}),
-		"InClusterConfig":      c.Universe.Function(types.Name{Package: "k8s.io/client-go/rest", Name: "InClusterConfig"}),
-		"BuildConfigFromFlags": c.Universe.Function(types.Name{Package: "k8s.io/client-go/tools/clientcmd", Name: "BuildConfigFromFlags"}),
+		"types":                getResourceTypes(c, g.types),
+		"Config":               c.Universe.Type(restConfig),
+		"InClusterConfig":      c.Universe.Function(restInClusterConfigFunc),
+		"BuildConfigFromFlags": c.Universe.Function(clientcmdBuildConfigFromFlagsFunc),
 		"NewController":        c.Universe.Function(types.Name{Package: g.controllerPackagePath, Name: "NewController"}),
 	}
 	sw.Do(mainFunc, m)
@@ -270,7 +296,9 @@ func main() {
     // FIXME make dynamic
     kubeClientset,
     // FIXME make dynamic
-    kubeInformerFactory.Core().V1().Pods(),
+    $- range .types$
+    kubeInformerFactory.Core().V1().$.Name$s(),
+    $- end$
   ).Run(stopCh)
 
   // FIXME make dynamic

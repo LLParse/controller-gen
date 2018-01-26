@@ -19,7 +19,7 @@ controller-gen \
   --go-header-file /dev/null \
   -v 3 \
   --name example \
-  --resource-types Pod
+  --resource-types Pod,Node,Service,ReplicationController,Event
 ```
 
 Build the controller

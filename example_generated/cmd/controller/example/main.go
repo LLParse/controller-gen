@@ -38,7 +38,11 @@ func main() {
 		// FIXME make dynamic
 		kubeClientset,
 		// FIXME make dynamic
+		kubeInformerFactory.Core().V1().Events(),
+		kubeInformerFactory.Core().V1().Nodes(),
 		kubeInformerFactory.Core().V1().Pods(),
+		kubeInformerFactory.Core().V1().ReplicationControllers(),
+		kubeInformerFactory.Core().V1().Services(),
 	).Run(stopCh)
 
 	// FIXME make dynamic
