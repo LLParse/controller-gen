@@ -22,7 +22,9 @@ type CustomArgs struct {
 	// Overrides for which types should be included in the client.
 	Types map[clientgenTypes.GroupVersion][]string
 
-	BasePath string
+	ApiPackage      string
+	ListerPackage   string
+	InformerPackage string
 }
 
 func NewDefaults() (*args.GeneratorArgs, *CustomArgs) {
@@ -40,9 +42,11 @@ func NewDefaults() (*args.GeneratorArgs, *CustomArgs) {
 	return genericArgs, customArgs
 }
 
-func (ca *CustomArgs) AddFlags(fs *pflag.FlagSet, inputBase string) {
+func (ca *CustomArgs) AddFlags(fs *pflag.FlagSet, apiPackage, informerPackage, listerPackage string) {
 	gvsBuilder := NewGroupVersionsBuilder(&ca.Groups)
-	pflag.Var(NewInputBasePathValue(gvsBuilder, &ca.BasePath, inputBase), "api-package", "base path to look for the api group.")
+	pflag.Var(NewInputBasePathValue(gvsBuilder, &ca.ApiPackage, apiPackage), "api-package", "path to the api package.")
+	pflag.StringVar(&ca.InformerPackage, "informer-package", ca.InformerPackage, "path to the informer package.")
+	pflag.StringVar(&ca.ListerPackage, "lister-package", ca.ListerPackage, "path to the lister package.")
 	pflag.Var(NewGVTypesValue(gvsBuilder, &ca.Types, []string{}), "types", "list of group/version/type for which controller should receive change events.")
 	pflag.StringVarP(&ca.Name, "name", "n", ca.Name, "the name of the generated controller.")
 }

@@ -40,39 +40,6 @@ func (g *controllerBaseGenerator) Imports(c *generator.Context) []string {
 	return g.imports.ImportLines()
 }
 
-type ResourceType struct {
-	Name        string
-	Type        *types.Type
-	GroupName   string
-	VersionName string
-	Informer    Informer
-	Lister      Lister
-	Queue       Queue
-	Worker      Worker
-}
-
-type Informer struct {
-	VariableName string
-	Type         *types.Type
-}
-
-type Lister struct {
-	VariableName string
-	Type         *types.Type
-
-	InformerSyncedVariableName string
-	InformerSyncedFunction     *types.Type
-}
-
-type Queue struct {
-	VariableName  string
-	InterfaceType *types.Type
-}
-
-type Worker struct {
-	VariableName string
-}
-
 func (g *controllerBaseGenerator) GenerateType(c *generator.Context, t *types.Type, w io.Writer) error {
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
@@ -86,13 +53,11 @@ func (g *controllerBaseGenerator) GenerateType(c *generator.Context, t *types.Ty
 	sw.Do(newControllerFunc, m)
 	sw.Do(controllerRunFunc, m)
 	sw.Do(controllerEnqueueWorkFunc, m)
-	sw.Do(controllerPodWorkerFunc, m)
 	return sw.Error()
 }
 
 var controllerType = `
 type Controller struct {
-  // FIXME make dynamic
   kubeClient $.KubeClient|raw$
 
   $range .types$
@@ -108,7 +73,7 @@ type Controller struct {
 
 var newControllerFunc = `
 func NewController(
-  // FIXME make dynamic
+  // TODO (controller-gen) track client package
   kubeClient $.KubeClient|raw$,
   $- range .types$
   $.Informer.VariableName$ $.Informer.Type|raw$,
@@ -179,29 +144,4 @@ func (ctrl *Controller) enqueueWork(queue workqueue.Interface, obj interface{}) 
   glog.V(5).Infof("enqueued %q for sync", objName)
   queue.Add(objName)
 }
-`
-
-var controllerPodWorkerFunc = `
-$range .types$
-func (ctrl *Controller) $.Worker.VariableName$() {
-  workFunc := func() bool {
-    keyObj, quit := ctrl.$.Queue.VariableName$.Get()
-    if quit {
-      return true
-    }
-    defer ctrl.$.Queue.VariableName$.Done(keyObj)
-    key := keyObj.(string)
-    glog.V(5).Infof("$.Worker.VariableName$[%s]", key)
-
-    // TODO actual work
-    return false
-  }
-  for {
-    if quit := workFunc(); quit {
-      glog.Infof("$.Worker.VariableName$ queue shutting down")
-      return
-    }
-  }
-}
-$- end$
 `

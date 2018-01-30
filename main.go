@@ -19,7 +19,7 @@ func main() {
 	genericArgs.OutputPackagePath = "k8s.io/kubernetes/pkg/generated/controller"
 
 	genericArgs.AddFlags(pflag.CommandLine)
-	customArgs.AddFlags(pflag.CommandLine, "k8s.io/api")
+	customArgs.AddFlags(pflag.CommandLine, "k8s.io/api", "k8s.io/client-go/informers", "k8s.io/client-go/listers")
 
 	flag.Set("logtostderr", "true")
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)

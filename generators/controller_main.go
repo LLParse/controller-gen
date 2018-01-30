@@ -68,22 +68,20 @@ func main() {
     panic(err)
   }
 
-  // FIXME make dynamic
+  // TODO (controller-gen) track client package
   kubeClientset := kubernetes.NewForConfigOrDie(config)
-  // FIXME make dynamic
+  // TODO (controller-gen) track informer package
   kubeInformerFactory := informers.NewSharedInformerFactory(kubeClientset, 0*time.Second)
 
   stopCh := makeStopChan()
 
   go $.NewController|raw$(
-    // FIXME make dynamic
     kubeClientset,
     $- range .types$
     kubeInformerFactory.$.GroupName$().$.VersionName$().$.Type|publicPlural$(),
     $- end$
   ).Run(stopCh)
 
-  // FIXME make dynamic
   kubeInformerFactory.Start(stopCh)
 
   <-stopCh
