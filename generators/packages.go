@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+
 	"k8s.io/code-generator/cmd/client-gen/generators/util"
 	clientgentypes "k8s.io/code-generator/cmd/client-gen/types"
 	"k8s.io/gengo/args"
@@ -60,16 +61,18 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 
 	boilerplate = append(boilerplate, []byte(generatedBy())...)
 
-	customArgs, ok := arguments.CustomArgs.(customargs.Args)
+	customArgs, ok := arguments.CustomArgs.(*customargs.CustomArgs)
 	if !ok {
-		glog.Fatalf("cannot convert arguments.CustomArgs to customargs.Args")
+		glog.Fatalf("cannot convert arguments.CustomArgs to customargs.CustomArgs")
 	}
 
-	var typesToGenerate []*types.Type
-	for _, inputDir := range arguments.InputDirs {
-		p := context.Universe.Package(inputDir)
+	groupVersionForType := make(map[*types.Type]clientgentypes.GroupVersion)
 
-		objectMeta, internal, err := objectMetaForPackage(p)
+	var typesToGenerate []*types.Type
+	for gv, types := range customArgs.Types {
+		gvPackage := context.Universe.Package(filepath.Join(customArgs.BasePath, gv.Group.String(), gv.Version.String()))
+
+		objectMeta, _, err := objectMetaForPackage(gvPackage)
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -77,44 +80,13 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 			// no types in this package had genclient
 			continue
 		}
-		glog.V(3).Infof("objectMeta: %+v\n", objectMeta)
-		glog.V(3).Infof("internal: %+v\n", internal)
 
-		var gv clientgentypes.GroupVersion
-		// var internalGVPkg string
-
-		if internal {
-			lastSlash := strings.LastIndex(p.Path, "/")
-			if lastSlash == -1 {
-				glog.Fatalf("error constructing internal group version for package %q", p.Path)
-			}
-			gv.Group = clientgentypes.Group(p.Path[lastSlash+1:])
-			// internalGVPkg = p.Path
-		} else {
-			parts := strings.Split(p.Path, "/")
-			gv.Group = clientgentypes.Group(parts[len(parts)-2])
-			gv.Version = clientgentypes.Version(parts[len(parts)-1])
-			glog.V(3).Infof("gv: %+v\n", gv)
-			// internalGVPkg = strings.Join(parts[0:len(parts)-1], "/")
-		}
-
-		// If there's a comment of the form "// +groupName=somegroup" or
-		// "// +groupName=somegroup.foo.bar.io", use the first field (somegroup) as the name of the
-		// group when generating.
-		if override := types.ExtractCommentTags("+", p.DocComments)["groupName"]; override != nil {
-			gv.Group = clientgentypes.Group(strings.SplitN(override[0], ".", 2)[0])
-			glog.V(3).Infof("gv override: %+v\n", gv)
-		}
-
-		for name, t := range p.Types {
-			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
-			if !tags.GenerateClient || !tags.HasVerb("list") || !tags.HasVerb("get") {
-				continue
-			}
-			glog.V(3).Infof("%+v: %+v", name, t)
-			for _, resourceType := range customArgs.ResourceTypes {
-				if strings.EqualFold(resourceType, name) {
-					typesToGenerate = append(typesToGenerate, t)
+		for _, typeName := range types {
+			for packageTypeName, packageType := range gvPackage.Types {
+				if strings.EqualFold(typeName, packageTypeName) {
+					groupVersionForType[packageType] = gv
+					typesToGenerate = append(typesToGenerate, packageType)
+					// glog.V(3).Infof("%s: %+v", packageTypeName, packageType)
 					break
 				}
 			}
@@ -130,8 +102,6 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		glog.Fatalf("no valid types were specified")
 	}
 
-	glog.V(3).Infof("Types to generate: %+v", typesToGenerate)
-
 	var packageList generator.Packages
 
 	controllerPackagePath := filepath.Join(arguments.OutputPackagePath, "pkg", "controller", customArgs.Name)
@@ -144,10 +114,11 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				DefaultGen: generator.DefaultGen{
 					OptionalName: "controller",
 				},
-				packagePath: filepath.Join(arguments.OutputBase, controllerPackagePath),
-				imports:     generator.NewImportTracker(),
-				name:        customArgs.Name,
-				types:       typesToGenerate,
+				packagePath:         filepath.Join(arguments.OutputBase, controllerPackagePath),
+				imports:             generator.NewImportTracker(),
+				name:                customArgs.Name,
+				types:               typesToGenerate,
+				groupVersionForType: groupVersionForType,
 			})
 			return generators
 		},
@@ -172,6 +143,7 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				imports:               generator.NewImportTracker(),
 				name:                  customArgs.Name,
 				types:                 typesToGenerate,
+				groupVersionForType:   groupVersionForType,
 			})
 			return generators
 		},

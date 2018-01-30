@@ -14,12 +14,11 @@ Generate the controller code
 
 ```sh
 controller-gen \
-  --input-dirs k8s.io/api/core/v1 \
   --output-package "github.com/llparse/controller-gen/example_generated" \
   --go-header-file /dev/null \
   -v 3 \
   --name example \
-  --resource-types Pod,Node,Service,ReplicationController,Event
+  --types core/v1/Pod,core/v1/Service,apps/v1beta2/Deployment,storage/v1/StorageClass
 ```
 
 Build the controller
@@ -33,3 +32,4 @@ Run it!
 ```sh
 ./controller-example -kubeconfig ~/.kube/config -v 5
 ```
+

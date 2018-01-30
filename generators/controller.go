@@ -2,31 +2,34 @@ package generators
 
 import (
 	"io"
-	// "os"
-	// "path/filepath"
+	"path/filepath"
 	"strings"
 
-	// "k8s.io/code-generator/cmd/client-gen/generators/util"
+	clientgentypes "k8s.io/code-generator/cmd/client-gen/types"
 	"k8s.io/gengo/generator"
 	"k8s.io/gengo/namer"
 	"k8s.io/gengo/types"
-	// controllergentypes "github.com/llparse/controller-gen/types"
 )
 
 // controllerGenerator produces a controller main
 type controllerGenerator struct {
 	generator.DefaultGen
-	packagePath string
-	imports     namer.ImportTracker
-	name        string
-	types       []*types.Type
+	packagePath         string
+	imports             namer.ImportTracker
+	name                string
+	types               []*types.Type
+	groupVersionForType map[*types.Type]clientgentypes.GroupVersion
 }
 
 var _ generator.Generator = &controllerGenerator{}
 
 func (g *controllerGenerator) Namers(c *generator.Context) namer.NameSystems {
+	pluralExceptions := map[string]string{
+		"Endpoints": "Endpoints",
+	}
 	return namer.NameSystems{
-		"raw": namer.NewRawNamer(g.packagePath, g.imports),
+		"raw":          namer.NewRawNamer(g.packagePath, g.imports),
+		"publicPlural": namer.NewPublicPluralNamer(pluralExceptions),
 	}
 }
 
@@ -40,11 +43,14 @@ func (g *controllerGenerator) Imports(c *generator.Context) []string {
 }
 
 type ResourceType struct {
-	Name     string
-	Informer Informer
-	Lister   Lister
-	Queue    Queue
-	Worker   Worker
+	Name        string
+	Type        *types.Type
+	GroupName   string
+	VersionName string
+	Informer    Informer
+	Lister      Lister
+	Queue       Queue
+	Worker      Worker
 }
 
 type Informer struct {
@@ -69,19 +75,24 @@ type Worker struct {
 	VariableName string
 }
 
-func getResourceTypes(c *generator.Context, rTypes []*types.Type) (resourceTypes []ResourceType) {
+func getResourceTypes(c *generator.Context, rTypes []*types.Type, gvForType map[*types.Type]clientgentypes.GroupVersion) (resourceTypes []ResourceType) {
 	// TODO how do we find the lister/informer packages and can we import them
 	for _, t := range rTypes {
 		nameLowerFirst := strings.ToLower(t.Name.Name[:1]) + t.Name.Name[1:]
+		group := gvForType[t].Group.NonEmpty()
+		version := gvForType[t].Version.NonEmpty()
 		resourceTypes = append(resourceTypes, ResourceType{
-			Name: t.Name.Name,
+			Name:        t.Name.Name,
+			Type:        t,
+			GroupName:   namer.IC(group),
+			VersionName: namer.IC(version),
 			Informer: Informer{
 				VariableName: nameLowerFirst + "Informer",
-				Type:         c.Universe.Type(types.Name{Package: "k8s.io/client-go/informers/core/v1", Name: t.Name.Name + "Informer"}),
+				Type:         c.Universe.Type(types.Name{Package: filepath.Join("k8s.io/client-go/informers", group, version), Name: t.Name.Name + "Informer"}),
 			},
 			Lister: Lister{
 				VariableName: nameLowerFirst + "Lister",
-				Type:         c.Universe.Type(types.Name{Package: "k8s.io/client-go/listers/core/v1", Name: t.Name.Name + "Lister"}),
+				Type:         c.Universe.Type(types.Name{Package: filepath.Join("k8s.io/client-go/listers", group, version), Name: t.Name.Name + "Lister"}),
 				InformerSyncedVariableName: strings.ToLower(t.Name.Name) + "ListerSynced",
 				InformerSyncedFunction:     c.Universe.Function(cacheInformerSyncedFunc),
 			},
@@ -101,7 +112,7 @@ func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, 
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":      getResourceTypes(c, g.types),
+		"types":      getResourceTypes(c, g.types, g.groupVersionForType),
 		"Name":       g.name,
 		"KubeClient": c.Universe.Type(kubernetesInterface),
 	}
@@ -114,8 +125,6 @@ func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, 
 	return sw.Error()
 }
 
-// listerscorev1 "k8s.io/client-go/listers/core/v1", "k8s.io/client-go/tools/cache",
-// "k8s.io/client-go/kubernetes", "k8s.io/client-go/util/workqueue"
 var controllerType = `
 type Controller struct {
   // FIXME make dynamic
@@ -238,13 +247,18 @@ type controllerMainGenerator struct {
 	imports               namer.ImportTracker
 	name                  string
 	types                 []*types.Type
+	groupVersionForType   map[*types.Type]clientgentypes.GroupVersion
 }
 
 var _ generator.Generator = &controllerMainGenerator{}
 
 func (g *controllerMainGenerator) Namers(c *generator.Context) namer.NameSystems {
+	pluralExceptions := map[string]string{
+		"Endpoints": "Endpoints",
+	}
 	return namer.NameSystems{
-		"raw": namer.NewRawNamer(g.packagePath, g.imports),
+		"raw":          namer.NewRawNamer(g.packagePath, g.imports),
+		"publicPlural": namer.NewPublicPluralNamer(pluralExceptions),
 	}
 }
 
@@ -261,7 +275,7 @@ func (g *controllerMainGenerator) GenerateType(c *generator.Context, t *types.Ty
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":                getResourceTypes(c, g.types),
+		"types":                getResourceTypes(c, g.types, g.groupVersionForType),
 		"Config":               c.Universe.Type(restConfig),
 		"InClusterConfig":      c.Universe.Function(restInClusterConfigFunc),
 		"BuildConfigFromFlags": c.Universe.Function(clientcmdBuildConfigFromFlagsFunc),
@@ -273,7 +287,6 @@ func (g *controllerMainGenerator) GenerateType(c *generator.Context, t *types.Ty
 	return sw.Error()
 }
 
-// k8s.io/client-go/informers, k8s.io/client-go/kubernetes
 var mainFunc = `
 func main() {
   kubeconfig := flag.String("kubeconfig", "", "Path to a kube config; only required if out-of-cluster.")
@@ -295,9 +308,8 @@ func main() {
   go $.NewController|raw$(
     // FIXME make dynamic
     kubeClientset,
-    // FIXME make dynamic
     $- range .types$
-    kubeInformerFactory.Core().V1().$.Name$s(),
+    kubeInformerFactory.$.GroupName$().$.VersionName$().$.Type|publicPlural$(),
     $- end$
   ).Run(stopCh)
 

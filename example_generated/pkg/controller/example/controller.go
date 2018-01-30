@@ -7,9 +7,13 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/util/wait"
+	apps_v1beta2 "k8s.io/client-go/informers/apps/v1beta2"
 	core_v1 "k8s.io/client-go/informers/core/v1"
+	informers_storage_v1 "k8s.io/client-go/informers/storage/v1"
 	kubernetes "k8s.io/client-go/kubernetes"
+	v1beta2 "k8s.io/client-go/listers/apps/v1beta2"
 	v1 "k8s.io/client-go/listers/core/v1"
+	storage_v1 "k8s.io/client-go/listers/storage/v1"
 	cache "k8s.io/client-go/tools/cache"
 	workqueue "k8s.io/client-go/util/workqueue"
 )
@@ -18,54 +22,42 @@ type Controller struct {
 	// FIXME make dynamic
 	kubeClient kubernetes.Interface
 
-	eventLister                       v1.EventLister
-	eventListerSynced                 cache.InformerSynced
-	nodeLister                        v1.NodeLister
-	nodeListerSynced                  cache.InformerSynced
-	podLister                         v1.PodLister
-	podListerSynced                   cache.InformerSynced
-	replicationControllerLister       v1.ReplicationControllerLister
-	replicationcontrollerListerSynced cache.InformerSynced
-	serviceLister                     v1.ServiceLister
-	serviceListerSynced               cache.InformerSynced
+	deploymentLister         v1beta2.DeploymentLister
+	deploymentListerSynced   cache.InformerSynced
+	podLister                v1.PodLister
+	podListerSynced          cache.InformerSynced
+	serviceLister            v1.ServiceLister
+	serviceListerSynced      cache.InformerSynced
+	storageClassLister       storage_v1.StorageClassLister
+	storageclassListerSynced cache.InformerSynced
 
-	eventQueue                 workqueue.RateLimitingInterface
-	nodeQueue                  workqueue.RateLimitingInterface
-	podQueue                   workqueue.RateLimitingInterface
-	replicationControllerQueue workqueue.RateLimitingInterface
-	serviceQueue               workqueue.RateLimitingInterface
+	deploymentQueue   workqueue.RateLimitingInterface
+	podQueue          workqueue.RateLimitingInterface
+	serviceQueue      workqueue.RateLimitingInterface
+	storageClassQueue workqueue.RateLimitingInterface
 }
 
 func NewController(
 	// FIXME make dynamic
 	kubeClient kubernetes.Interface,
-	eventInformer core_v1.EventInformer,
-	nodeInformer core_v1.NodeInformer,
+	deploymentInformer apps_v1beta2.DeploymentInformer,
 	podInformer core_v1.PodInformer,
-	replicationControllerInformer core_v1.ReplicationControllerInformer,
 	serviceInformer core_v1.ServiceInformer,
+	storageClassInformer informers_storage_v1.StorageClassInformer,
 ) *Controller {
 	ctrl := &Controller{
-		kubeClient:                 kubeClient,
-		eventQueue:                 workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Event"),
-		nodeQueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Node"),
-		podQueue:                   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pod"),
-		replicationControllerQueue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "ReplicationController"),
-		serviceQueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Service"),
+		kubeClient:        kubeClient,
+		deploymentQueue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Deployment"),
+		podQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pod"),
+		serviceQueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Service"),
+		storageClassQueue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "StorageClass"),
 	}
 
-	eventInformer.Informer().AddEventHandler(
+	deploymentInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.eventQueue, obj) },
-			UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.eventQueue, newObj) },
-			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.eventQueue, obj) },
-		},
-	)
-	nodeInformer.Informer().AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.nodeQueue, obj) },
-			UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.nodeQueue, newObj) },
-			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.nodeQueue, obj) },
+			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.deploymentQueue, obj) },
+			UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.deploymentQueue, newObj) },
+			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.deploymentQueue, obj) },
 		},
 	)
 	podInformer.Informer().AddEventHandler(
@@ -75,13 +67,6 @@ func NewController(
 			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.podQueue, obj) },
 		},
 	)
-	replicationControllerInformer.Informer().AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.replicationControllerQueue, obj) },
-			UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.replicationControllerQueue, newObj) },
-			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.replicationControllerQueue, obj) },
-		},
-	)
 	serviceInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.serviceQueue, obj) },
@@ -89,40 +74,43 @@ func NewController(
 			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.serviceQueue, obj) },
 		},
 	)
+	storageClassInformer.Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    func(obj interface{}) { ctrl.enqueueWork(ctrl.storageClassQueue, obj) },
+			UpdateFunc: func(oldObj, newObj interface{}) { ctrl.enqueueWork(ctrl.storageClassQueue, newObj) },
+			DeleteFunc: func(obj interface{}) { ctrl.enqueueWork(ctrl.storageClassQueue, obj) },
+		},
+	)
 
-	ctrl.eventLister = eventInformer.Lister()
-	ctrl.eventListerSynced = eventInformer.Informer().HasSynced
-	ctrl.nodeLister = nodeInformer.Lister()
-	ctrl.nodeListerSynced = nodeInformer.Informer().HasSynced
+	ctrl.deploymentLister = deploymentInformer.Lister()
+	ctrl.deploymentListerSynced = deploymentInformer.Informer().HasSynced
 	ctrl.podLister = podInformer.Lister()
 	ctrl.podListerSynced = podInformer.Informer().HasSynced
-	ctrl.replicationControllerLister = replicationControllerInformer.Lister()
-	ctrl.replicationcontrollerListerSynced = replicationControllerInformer.Informer().HasSynced
 	ctrl.serviceLister = serviceInformer.Lister()
 	ctrl.serviceListerSynced = serviceInformer.Informer().HasSynced
+	ctrl.storageClassLister = storageClassInformer.Lister()
+	ctrl.storageclassListerSynced = storageClassInformer.Informer().HasSynced
 
 	return ctrl
 }
 
 func (ctrl *Controller) Run(stopCh <-chan struct{}) {
-	defer ctrl.eventQueue.ShutDown()
-	defer ctrl.nodeQueue.ShutDown()
+	defer ctrl.deploymentQueue.ShutDown()
 	defer ctrl.podQueue.ShutDown()
-	defer ctrl.replicationControllerQueue.ShutDown()
 	defer ctrl.serviceQueue.ShutDown()
+	defer ctrl.storageClassQueue.ShutDown()
 
 	glog.Infof("Starting example controller")
 	defer glog.Infof("Shutting down example Controller")
 
-	if !cache.WaitForCacheSync(stopCh, ctrl.eventListerSynced, ctrl.nodeListerSynced, ctrl.podListerSynced, ctrl.replicationcontrollerListerSynced, ctrl.serviceListerSynced) {
+	if !cache.WaitForCacheSync(stopCh, ctrl.deploymentListerSynced, ctrl.podListerSynced, ctrl.serviceListerSynced, ctrl.storageclassListerSynced) {
 		return
 	}
 
-	go wait.Until(ctrl.eventWorker, time.Second, stopCh)
-	go wait.Until(ctrl.nodeWorker, time.Second, stopCh)
+	go wait.Until(ctrl.deploymentWorker, time.Second, stopCh)
 	go wait.Until(ctrl.podWorker, time.Second, stopCh)
-	go wait.Until(ctrl.replicationControllerWorker, time.Second, stopCh)
 	go wait.Until(ctrl.serviceWorker, time.Second, stopCh)
+	go wait.Until(ctrl.storageClassWorker, time.Second, stopCh)
 
 	<-stopCh
 }
@@ -141,38 +129,20 @@ func (ctrl *Controller) enqueueWork(queue workqueue.Interface, obj interface{}) 
 	queue.Add(objName)
 }
 
-func (ctrl *Controller) eventWorker() {
+func (ctrl *Controller) deploymentWorker() {
 	workFunc := func() bool {
-		keyObj, quit := ctrl.eventQueue.Get()
+		keyObj, quit := ctrl.deploymentQueue.Get()
 		if quit {
 			return true
 		}
-		defer ctrl.eventQueue.Done(keyObj)
+		defer ctrl.deploymentQueue.Done(keyObj)
 		key := keyObj.(string)
-		glog.V(5).Infof("eventWorker[%s]", key)
+		glog.V(5).Infof("deploymentWorker[%s]", key)
 		return false
 	}
 	for {
 		if quit := workFunc(); quit {
-			glog.Infof("eventWorker queue shutting down")
-			return
-		}
-	}
-}
-func (ctrl *Controller) nodeWorker() {
-	workFunc := func() bool {
-		keyObj, quit := ctrl.nodeQueue.Get()
-		if quit {
-			return true
-		}
-		defer ctrl.nodeQueue.Done(keyObj)
-		key := keyObj.(string)
-		glog.V(5).Infof("nodeWorker[%s]", key)
-		return false
-	}
-	for {
-		if quit := workFunc(); quit {
-			glog.Infof("nodeWorker queue shutting down")
+			glog.Infof("deploymentWorker queue shutting down")
 			return
 		}
 	}
@@ -195,24 +165,6 @@ func (ctrl *Controller) podWorker() {
 		}
 	}
 }
-func (ctrl *Controller) replicationControllerWorker() {
-	workFunc := func() bool {
-		keyObj, quit := ctrl.replicationControllerQueue.Get()
-		if quit {
-			return true
-		}
-		defer ctrl.replicationControllerQueue.Done(keyObj)
-		key := keyObj.(string)
-		glog.V(5).Infof("replicationControllerWorker[%s]", key)
-		return false
-	}
-	for {
-		if quit := workFunc(); quit {
-			glog.Infof("replicationControllerWorker queue shutting down")
-			return
-		}
-	}
-}
 func (ctrl *Controller) serviceWorker() {
 	workFunc := func() bool {
 		keyObj, quit := ctrl.serviceQueue.Get()
@@ -227,6 +179,24 @@ func (ctrl *Controller) serviceWorker() {
 	for {
 		if quit := workFunc(); quit {
 			glog.Infof("serviceWorker queue shutting down")
+			return
+		}
+	}
+}
+func (ctrl *Controller) storageClassWorker() {
+	workFunc := func() bool {
+		keyObj, quit := ctrl.storageClassQueue.Get()
+		if quit {
+			return true
+		}
+		defer ctrl.storageClassQueue.Done(keyObj)
+		key := keyObj.(string)
+		glog.V(5).Infof("storageClassWorker[%s]", key)
+		return false
+	}
+	for {
+		if quit := workFunc(); quit {
+			glog.Infof("storageClassWorker queue shutting down")
 			return
 		}
 	}

@@ -37,12 +37,10 @@ func main() {
 	go example.NewController(
 		// FIXME make dynamic
 		kubeClientset,
-		// FIXME make dynamic
-		kubeInformerFactory.Core().V1().Events(),
-		kubeInformerFactory.Core().V1().Nodes(),
+		kubeInformerFactory.Apps().V1beta2().Deployments(),
 		kubeInformerFactory.Core().V1().Pods(),
-		kubeInformerFactory.Core().V1().ReplicationControllers(),
 		kubeInformerFactory.Core().V1().Services(),
+		kubeInformerFactory.Storage().V1().StorageClasses(),
 	).Run(stopCh)
 
 	// FIXME make dynamic
