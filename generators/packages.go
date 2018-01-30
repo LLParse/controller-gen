@@ -117,6 +117,7 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				name:                customArgs.Name,
 				types:               typesToGenerate,
 				groupVersionForType: groupVersionForType,
+				args:                customArgs,
 			})
 			return generators
 		},
@@ -139,6 +140,7 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				name:                customArgs.Name,
 				types:               typesToGenerate,
 				groupVersionForType: groupVersionForType,
+				args:                customArgs,
 			})
 			return generators
 		},
@@ -164,6 +166,7 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				name:                  customArgs.Name,
 				types:                 typesToGenerate,
 				groupVersionForType:   groupVersionForType,
+				args:                  customArgs,
 			})
 			return generators
 		},

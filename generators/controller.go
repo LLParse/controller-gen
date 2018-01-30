@@ -7,6 +7,8 @@ import (
 	"k8s.io/gengo/generator"
 	"k8s.io/gengo/namer"
 	"k8s.io/gengo/types"
+
+	"github.com/llparse/controller-gen/args"
 )
 
 // controllerGenerator produces a controller main
@@ -17,6 +19,7 @@ type controllerGenerator struct {
 	name                string
 	types               []*types.Type
 	groupVersionForType map[*types.Type]clientgentypes.GroupVersion
+	args                *args.CustomArgs
 }
 
 var _ generator.Generator = &controllerGenerator{}
@@ -44,7 +47,7 @@ func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, 
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":      getResourceTypes(c, g.types, g.groupVersionForType),
+		"types":      getResourceTypes(c, g.types, g.groupVersionForType, g.args),
 		"Name":       g.name,
 		"KubeClient": c.Universe.Type(kubernetesInterface),
 	}

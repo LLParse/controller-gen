@@ -7,6 +7,8 @@ import (
 	"k8s.io/gengo/generator"
 	"k8s.io/gengo/namer"
 	"k8s.io/gengo/types"
+
+	"github.com/llparse/controller-gen/args"
 )
 
 // controllerMainGenerator produces a controller main
@@ -18,6 +20,7 @@ type controllerMainGenerator struct {
 	name                  string
 	types                 []*types.Type
 	groupVersionForType   map[*types.Type]clientgentypes.GroupVersion
+	args                  *args.CustomArgs
 }
 
 var _ generator.Generator = &controllerMainGenerator{}
@@ -45,7 +48,7 @@ func (g *controllerMainGenerator) GenerateType(c *generator.Context, t *types.Ty
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":                getResourceTypes(c, g.types, g.groupVersionForType),
+		"types":                getResourceTypes(c, g.types, g.groupVersionForType, g.args),
 		"Config":               c.Universe.Type(restConfig),
 		"InClusterConfig":      c.Universe.Function(restInClusterConfigFunc),
 		"BuildConfigFromFlags": c.Universe.Function(clientcmdBuildConfigFromFlagsFunc),

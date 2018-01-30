@@ -30,7 +30,10 @@ type CustomArgs struct {
 func NewDefaults() (*args.GeneratorArgs, *CustomArgs) {
 	genericArgs := args.Default().WithoutDefaultFlagParsing()
 	customArgs := &CustomArgs{
-		Name: "example",
+		Name:            "example",
+		ApiPackage:      "k8s.io/api",
+		InformerPackage: "k8s.io/client-go/informers",
+		ListerPackage:   "k8s.io/client-go/listers",
 	}
 	genericArgs.CustomArgs = customArgs
 	genericArgs.InputDirs = DefaultInputDirs

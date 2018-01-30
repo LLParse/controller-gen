@@ -8,10 +8,12 @@ import (
 	"k8s.io/gengo/generator"
 	"k8s.io/gengo/namer"
 	"k8s.io/gengo/types"
+
+	"github.com/llparse/controller-gen/args"
 )
 
-// TODO parameterize lister/informer packages
-func getResourceTypes(c *generator.Context, rTypes []*types.Type, gvForType map[*types.Type]clientgentypes.GroupVersion) (resourceTypes []ResourceType) {
+func getResourceTypes(c *generator.Context, rTypes []*types.Type, gvForType map[*types.Type]clientgentypes.GroupVersion,
+	args *args.CustomArgs) (resourceTypes []ResourceType) {
 	for _, t := range rTypes {
 		nameLowerFirst := strings.ToLower(t.Name.Name[:1]) + t.Name.Name[1:]
 		group := gvForType[t].Group.NonEmpty()
@@ -23,11 +25,11 @@ func getResourceTypes(c *generator.Context, rTypes []*types.Type, gvForType map[
 			VersionName: namer.IC(version),
 			Informer: Informer{
 				VariableName: nameLowerFirst + "Informer",
-				Type:         c.Universe.Type(types.Name{Package: filepath.Join("k8s.io/client-go/informers", group, version), Name: t.Name.Name + "Informer"}),
+				Type:         c.Universe.Type(types.Name{Package: filepath.Join(args.InformerPackage, group, version), Name: t.Name.Name + "Informer"}),
 			},
 			Lister: Lister{
 				VariableName: nameLowerFirst + "Lister",
-				Type:         c.Universe.Type(types.Name{Package: filepath.Join("k8s.io/client-go/listers", group, version), Name: t.Name.Name + "Lister"}),
+				Type:         c.Universe.Type(types.Name{Package: filepath.Join(args.ListerPackage, group, version), Name: t.Name.Name + "Lister"}),
 				InformerSyncedVariableName: strings.ToLower(t.Name.Name) + "ListerSynced",
 				InformerSyncedFunction:     c.Universe.Function(cacheInformerSyncedFunc),
 			},
