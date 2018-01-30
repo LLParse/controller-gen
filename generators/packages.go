@@ -110,9 +110,9 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		PackagePath: controllerPackagePath,
 		HeaderText:  boilerplate,
 		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
-			generators = append(generators, &controllerGenerator{
+			generators = append(generators, &controllerBaseGenerator{
 				DefaultGen: generator.DefaultGen{
-					OptionalName: "controller",
+					OptionalName: "controller_base",
 				},
 				packagePath:         filepath.Join(arguments.OutputBase, controllerPackagePath),
 				imports:             generator.NewImportTracker(),
