@@ -48,11 +48,13 @@ func (g *controllerMainGenerator) GenerateType(c *generator.Context, t *types.Ty
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":                getResourceTypes(c, g.types, g.groupVersionForType, g.args),
-		"Config":               c.Universe.Type(restConfig),
-		"InClusterConfig":      c.Universe.Function(restInClusterConfigFunc),
-		"BuildConfigFromFlags": c.Universe.Function(clientcmdBuildConfigFromFlagsFunc),
-		"NewController":        c.Universe.Function(types.Name{Package: g.controllerPackagePath, Name: "NewController"}),
+		"types":                    getResourceTypes(c, g.types, g.groupVersionForType, g.args),
+		"Config":                   c.Universe.Type(restConfig),
+		"InClusterConfig":          c.Universe.Function(restInClusterConfigFunc),
+		"BuildConfigFromFlags":     c.Universe.Function(clientcmdBuildConfigFromFlagsFunc),
+		"NewController":            c.Universe.Function(types.Name{Package: g.controllerPackagePath, Name: "NewController"}),
+		"NewForConfigOrDie":        c.Universe.Function(types.Name{Package: g.args.ClientPackage, Name: "NewForConfigOrDie"}),
+		"NewSharedInformerFactory": c.Universe.Function(types.Name{Package: g.args.InformerPackage, Name: "NewSharedInformerFactory"}),
 	}
 	sw.Do(mainFunc, m)
 	sw.Do(newKubeClientConfigFunc, m)
@@ -71,21 +73,19 @@ func main() {
     panic(err)
   }
 
-  // TODO (controller-gen) track client package
-  kubeClientset := kubernetes.NewForConfigOrDie(config)
-  // TODO (controller-gen) track informer package
-  kubeInformerFactory := informers.NewSharedInformerFactory(kubeClientset, 0*time.Second)
+  client := $.NewForConfigOrDie|raw$(config)
+  informerFactory := $.NewSharedInformerFactory|raw$(client, 0*time.Second)
 
   stopCh := makeStopChan()
 
   go $.NewController|raw$(
-    kubeClientset,
+    client,
     $- range .types$
-    kubeInformerFactory.$.GroupName$().$.VersionName$().$.Type|publicPlural$(),
+    informerFactory.$.GroupName$().$.VersionName$().$.Type|publicPlural$(),
     $- end$
   ).Run(stopCh)
 
-  kubeInformerFactory.Start(stopCh)
+  informerFactory.Start(stopCh)
 
   <-stopCh
 }

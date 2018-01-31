@@ -25,7 +25,7 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
-	glog.V(1).Infof("CustomArgs: %+v", customArgs)
+	glog.V(2).Infof("CustomArgs: %+v", customArgs)
 
 	// add group version package as input dirs for gengo
 	for _, pkg := range customArgs.Groups {
@@ -33,7 +33,7 @@ func main() {
 			genericArgs.InputDirs = append(genericArgs.InputDirs, v.Package)
 		}
 	}
-	glog.V(1).Infof("InputDirs: %+v", genericArgs.InputDirs)
+	glog.V(2).Infof("InputDirs: %+v", genericArgs.InputDirs)
 
 	// Run it.
 	if err := genericArgs.Execute(

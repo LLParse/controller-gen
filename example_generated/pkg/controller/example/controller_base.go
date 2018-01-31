@@ -19,7 +19,7 @@ import (
 )
 
 type Controller struct {
-	kubeClient kubernetes.Interface
+	client kubernetes.Interface
 
 	deploymentLister         v1beta2.DeploymentLister
 	deploymentListerSynced   cache.InformerSynced
@@ -37,15 +37,14 @@ type Controller struct {
 }
 
 func NewController(
-	// TODO (controller-gen) track client package
-	kubeClient kubernetes.Interface,
+	client kubernetes.Interface,
 	deploymentInformer apps_v1beta2.DeploymentInformer,
 	podInformer core_v1.PodInformer,
 	serviceInformer core_v1.ServiceInformer,
 	storageClassInformer informers_storage_v1.StorageClassInformer,
 ) *Controller {
 	ctrl := &Controller{
-		kubeClient:        kubeClient,
+		client:            client,
 		deploymentQueue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Deployment"),
 		podQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pod"),
 		serviceQueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Service"),

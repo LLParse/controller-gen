@@ -11,7 +11,7 @@ import (
 	"github.com/llparse/controller-gen/args"
 )
 
-// controllerGenerator produces a controller main
+// controllerGenerator produces a controller
 type controllerGenerator struct {
 	generator.DefaultGen
 	packagePath         string
@@ -47,9 +47,7 @@ func (g *controllerGenerator) GenerateType(c *generator.Context, t *types.Type, 
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":      getResourceTypes(c, g.types, g.groupVersionForType, g.args),
-		"Name":       g.name,
-		"KubeClient": c.Universe.Type(kubernetesInterface),
+		"types": getResourceTypes(c, g.types, g.groupVersionForType, g.args),
 	}
 
 	sw.Do(controllerPodWorkerFunc, m)

@@ -11,7 +11,7 @@ import (
 	"github.com/llparse/controller-gen/args"
 )
 
-// controllerBaseGenerator produces a controller main
+// controllerBaseGenerator produces a controller_base
 type controllerBaseGenerator struct {
 	generator.DefaultGen
 	packagePath         string
@@ -47,9 +47,9 @@ func (g *controllerBaseGenerator) GenerateType(c *generator.Context, t *types.Ty
 	sw := generator.NewSnippetWriter(w, c, "$", "$")
 
 	m := map[string]interface{}{
-		"types":      getResourceTypes(c, g.types, g.groupVersionForType, g.args),
-		"Name":       g.name,
-		"KubeClient": c.Universe.Type(kubernetesInterface),
+		"types":           getResourceTypes(c, g.types, g.groupVersionForType, g.args),
+		"Name":            g.name,
+		"ClientInterface": c.Universe.Type(types.Name{Package: g.args.ClientPackage, Name: "Interface"}),
 	}
 
 	sw.Do(controllerType, m)
@@ -61,7 +61,7 @@ func (g *controllerBaseGenerator) GenerateType(c *generator.Context, t *types.Ty
 
 var controllerType = `
 type Controller struct {
-  kubeClient $.KubeClient|raw$
+  client $.ClientInterface|raw$
 
   $range .types$
   $.Lister.VariableName$ $.Lister.Type|raw$
@@ -76,14 +76,13 @@ type Controller struct {
 
 var newControllerFunc = `
 func NewController(
-  // TODO (controller-gen) track client package
-  kubeClient $.KubeClient|raw$,
+  client $.ClientInterface|raw$,
   $- range .types$
   $.Informer.VariableName$ $.Informer.Type|raw$,
   $- end$
 ) *Controller {
   ctrl := &Controller{
-    kubeClient: kubeClient,
+    client: client,
     $- range .types$
     $.Queue.VariableName$: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "$.Name$"),
     $- end$

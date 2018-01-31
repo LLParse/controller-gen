@@ -84,7 +84,6 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				if strings.EqualFold(typeName, packageTypeName) {
 					groupVersionForType[packageType] = gv
 					typesToGenerate = append(typesToGenerate, packageType)
-					// glog.V(3).Infof("%s: %+v", packageTypeName, packageType)
 					break
 				}
 			}

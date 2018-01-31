@@ -11,8 +11,8 @@ import (
 
 	"github.com/golang/glog"
 	example "github.com/llparse/controller-gen/example_generated/pkg/controller/example"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
+	informers "k8s.io/client-go/informers"
+	kubernetes "k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	clientcmd "k8s.io/client-go/tools/clientcmd"
 )
@@ -27,22 +27,20 @@ func main() {
 		panic(err)
 	}
 
-	// TODO (controller-gen) track client package
-	kubeClientset := kubernetes.NewForConfigOrDie(config)
-	// TODO (controller-gen) track informer package
-	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClientset, 0*time.Second)
+	client := kubernetes.NewForConfigOrDie(config)
+	informerFactory := informers.NewSharedInformerFactory(client, 0*time.Second)
 
 	stopCh := makeStopChan()
 
 	go example.NewController(
-		kubeClientset,
-		kubeInformerFactory.Apps().V1beta2().Deployments(),
-		kubeInformerFactory.Core().V1().Pods(),
-		kubeInformerFactory.Core().V1().Services(),
-		kubeInformerFactory.Storage().V1().StorageClasses(),
+		client,
+		informerFactory.Apps().V1beta2().Deployments(),
+		informerFactory.Core().V1().Pods(),
+		informerFactory.Core().V1().Services(),
+		informerFactory.Storage().V1().StorageClasses(),
 	).Run(stopCh)
 
-	kubeInformerFactory.Start(stopCh)
+	informerFactory.Start(stopCh)
 
 	<-stopCh
 }
